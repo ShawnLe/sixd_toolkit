@@ -342,15 +342,27 @@ def render(model, im_size, K, R, t, clip_near=100, clip_far=2000,
             vertices_type = [('a_position', np.float32, 3),
                              ('a_color', np.float32, colors.shape[1]),
                              ('a_texcoord', np.float32, 2)]
-            vertices = np.array(zip(model['pts'], colors, texture_uv),
+            vertices = np.array(list(zip(model['pts'], colors, texture_uv)),
                                 vertices_type)
+            print('type of vertices: ', type(vertices))
+            print('ver[a_position] ', vertices['a_position'])
+            print('ver[a_position] type ', vertices['a_position'].dtype)
+            print('ver[a_color] ', vertices['a_color'])
+            print('ver[a_color] type ', vertices['a_color'].dtype)
+            print('ver[a_texcoord] ', vertices['a_texcoord'])
+            print('ver[a_texcoord] type ', vertices['a_texcoord'].dtype)
+
+            print('vertices', vertices)
+            print('vertices shape', vertices.shape)
         else: # shading == 'phong'
             vertices_type = [('a_position', np.float32, 3),
                              ('a_normal', np.float32, 3),
                              ('a_color', np.float32, colors.shape[1]),
                              ('a_texcoord', np.float32, 2)]
-            vertices = np.array(zip(model['pts'], model['normals'],
-                                    colors, texture_uv), vertices_type)
+            vertices = np.array(list(zip(model['pts'], model['normals'],
+                                    colors, texture_uv)), vertices_type)
+            print('vertices', vertices)
+            print('vertices shape', vertices.shape)
 
     # Rendering
     #---------------------------------------------------------------------------
@@ -374,6 +386,12 @@ def render(model, im_size, K, R, t, clip_near=100, clip_far=2000,
 
     # Create buffers
     vertex_buffer = vertices.view(gloo.VertexBuffer)
+    print('vertex buffer type', type(vertex_buffer))
+    print('ver tex buffer ', vertex_buffer)
+    print('ver tex buffer [0]', vertex_buffer[0])
+    print('ver tex buffer [0][0]', vertex_buffer[0][0])
+    print('ver tex buffer [0][0]', vertex_buffer[0][1])
+    print('ver tex buffer [0][0]', vertex_buffer[0][2])
     index_buffer = model['faces'].flatten().astype(np.uint32).view(gloo.IndexBuffer)
 
     # Create window

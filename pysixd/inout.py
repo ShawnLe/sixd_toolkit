@@ -233,6 +233,7 @@ def load_ply(path):
         model['faces'] = np.zeros((n_faces, face_n_corners), np.float)
 
     pt_props_names = [p[0] for p in pt_props]
+    print('props name',pt_props_names)
     is_normal = False
     if {'nx', 'ny', 'nz'}.issubset(set(pt_props_names)):
         is_normal = True
@@ -245,6 +246,7 @@ def load_ply(path):
 
     is_texture = False
     if {'texture_u', 'texture_v'}.issubset(set(pt_props_names)):
+        print("it has texture")
         is_texture = True
         model['texture_uv'] = np.zeros((n_pts, 2), np.float)
 
@@ -260,6 +262,8 @@ def load_ply(path):
         prop_vals = {}
         load_props = ['x', 'y', 'z', 'nx', 'ny', 'nz',
                       'red', 'green', 'blue', 'texture_u', 'texture_v']
+        # load_props = ['x', 'y', 'z', 'nx', 'ny', 'nz',
+        #               'red', 'green', 'blue', 'alpha', 'texture_u', 'texture_v']                      
         if is_binary:
             for prop in pt_props:
                 format = formats[prop[1]]
