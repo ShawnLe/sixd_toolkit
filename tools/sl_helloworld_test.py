@@ -53,6 +53,29 @@ def flip_yz_image(image):
 
     return ret
 
+# tuning pose
+tx = -.002 # mm
+ty = -.005 
+tz = -.002
+rz = 2./180.*math.pi # rad
+
+xaxis, yaxis, zaxis = [1, 0, 0], [0, 1, 0], [0, 0, 1]
+Tt = tf.translation_matrix([tx, ty, tz])
+Rt = tf.rotation_matrix(rz, zaxis)
+
+TT = np.eye(4)
+TT[:3,:3] = Rt[:3,:3]
+TT[:3,3] = Tt[:3,3]
+
+# print('Tt = ')
+# print(Tt)
+# print('Rt = ')
+# print(Rt)
+print('TT = ')
+print(TT)
+# TT1 = np.dot(Tt,Rt)
+# print('TT1 = ')
+# print(TT1)
 
 for i in range(222):
     file_name = os.path.join(p0, '{:06d}'.format(i) + '-color.png')
@@ -79,6 +102,14 @@ for i in range(222):
     t =  poses[:3,3]
     t /= 1000.
     # print('t',t)
+
+    # update with tuning
+    Rt44 = np.eye(4)
+    Rt44[:3,:3] = R
+    Rt44[:3,3] = t
+    Rt44 = np.dot(Rt44,TT)
+    R = Rt44[:3,:3]
+    t = Rt44[:3,3]
 
     mdl_proj = renderer.render(model, im_size, K, R, t, mode='rgb', clip_near=.3, clip_far=6., shading='flat') 
     print("dtype", mdl_proj.dtype)
