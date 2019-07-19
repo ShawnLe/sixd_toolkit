@@ -1,6 +1,8 @@
 
 IMAGE_SHAPE = (1080, 1920)
 
+IMG_RESCALE_FACTOR = .5
+
 MESH_ROOT = '/media/shawnle/Data0/YCB_Video_Dataset/YCB_Video_Dataset/models/017_plastic_bottle/'
 
 NUM_INST = 6

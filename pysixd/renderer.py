@@ -203,6 +203,8 @@ def _compute_calib_proj(K, x0, y0, w, h, nc, fc, window_coords='y_down'):
 def draw_color(shape, vertex_buffer, index_buffer, texture, mat_model, mat_view,
                mat_proj, ambient_weight, bg_color, shading):
 
+    assert type(mat_view) is list, 'Requires list of arrays.'
+
     # Set shader for the selected shading
     if shading == 'flat':
         color_fragment_code = _color_fragment_flat_code
@@ -213,9 +215,6 @@ def draw_color(shape, vertex_buffer, index_buffer, texture, mat_model, mat_view,
     program.bind(vertex_buffer)
     program['u_light_eye_pos'] = [0, 0, 0] # Camera origin
     program['u_light_ambient_w'] = ambient_weight
-    program['u_mv'] = _compute_model_view(mat_model, mat_view)
-    program['u_nm'] = _compute_normal_matrix(mat_model, mat_view)
-    program['u_mvp'] = _compute_model_view_proj(mat_model, mat_view, mat_proj)
     if texture is not None:
         program['u_use_texture'] = int(True)
         program['u_texture'] = texture
@@ -227,6 +226,7 @@ def draw_color(shape, vertex_buffer, index_buffer, texture, mat_model, mat_view,
     color_buf = np.zeros((shape[0], shape[1], 4), np.float32).view(gloo.TextureFloat2D)
     depth_buf = np.zeros((shape[0], shape[1]), np.float32).view(gloo.DepthTexture)
     fbo = gloo.FrameBuffer(color=color_buf, depth=depth_buf)
+
     fbo.activate()
 
     # OpenGL setup
@@ -235,22 +235,28 @@ def draw_color(shape, vertex_buffer, index_buffer, texture, mat_model, mat_view,
     gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
     gl.glViewport(0, 0, shape[1], shape[0])
 
-    # gl.glEnable(gl.GL_BLEND)
-    # gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
-    # gl.glHint(gl.GL_LINE_SMOOTH_HINT, gl.GL_NICEST)
-    # gl.glHint(gl.GL_POLYGON_SMOOTH_HINT, gl.GL_NICEST)
-    # gl.glDisable(gl.GL_LINE_SMOOTH)
-    # gl.glDisable(gl.GL_POLYGON_SMOOTH)
-    # gl.glEnable(gl.GL_MULTISAMPLE)
+    for i in range(len(mat_view)):
 
-    # Keep the back-face culling disabled because of objects which do not have
-    # well-defined surface (e.g. the lamp from the dataset of Hinterstoisser)
-    gl.glDisable(gl.GL_CULL_FACE)
-    # gl.glEnable(gl.GL_CULL_FACE)
-    # gl.glCullFace(gl.GL_BACK) # Back-facing polygons will be culled
+        program['u_mv'] = _compute_model_view(mat_model, mat_view[i])
+        program['u_nm'] = _compute_normal_matrix(mat_model, mat_view[i])
+        program['u_mvp'] = _compute_model_view_proj(mat_model, mat_view[i], mat_proj)
 
-    # Rendering
-    program.draw(gl.GL_TRIANGLES, index_buffer)
+        # gl.glEnable(gl.GL_BLEND)
+        # gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
+        # gl.glHint(gl.GL_LINE_SMOOTH_HINT, gl.GL_NICEST)
+        # gl.glHint(gl.GL_POLYGON_SMOOTH_HINT, gl.GL_NICEST)
+        # gl.glDisable(gl.GL_LINE_SMOOTH)
+        # gl.glDisable(gl.GL_POLYGON_SMOOTH)
+        # gl.glEnable(gl.GL_MULTISAMPLE)
+
+        # Keep the back-face culling disabled because of objects which do not have
+        # well-defined surface (e.g. the lamp from the dataset of Hinterstoisser)
+        gl.glDisable(gl.GL_CULL_FACE)
+        # gl.glEnable(gl.GL_CULL_FACE)
+        # gl.glCullFace(gl.GL_BACK) # Back-facing polygons will be culled
+
+        # Rendering
+        program.draw(gl.GL_TRIANGLES, index_buffer)
 
     # Retrieve the contents of the FBO texture
     rgb = np.zeros((shape[0], shape[1], 4), dtype=np.float32)
@@ -307,6 +313,8 @@ def render(model, im_size, K, R, t, clip_near=100, clip_far=2000,
            texture=None, surf_color=None, bg_color=(0.0, 0.0, 0.0, 0.0),
            ambient_weight=0.5, shading='flat', mode='rgb+depth'):
 
+    assert type(R) is list and type(t) is list, 'Requires list of arrays.'
+
     # Process input data
     #---------------------------------------------------------------------------
     # Make sure vertices and faces are provided in the model
@@ -362,12 +370,16 @@ def render(model, im_size, K, R, t, clip_near=100, clip_far=2000,
 
     # View matrix (transforming also the coordinate system from OpenCV to
     # OpenGL camera space)
-    mat_view = np.eye(4, dtype=np.float32) # From world space to eye space
-    mat_view[:3, :3], mat_view[:3, 3] = R, t.squeeze()
-    yz_flip = np.eye(4, dtype=np.float32)
-    yz_flip[1, 1], yz_flip[2, 2] = -1, -1
-    mat_view = yz_flip.dot(mat_view) # OpenCV to OpenGL camera system
-    mat_view = mat_view.T # OpenGL expects column-wise matrix format
+    mat_views = []
+    for i in range(len(t)):
+        mat_view = np.eye(4, dtype=np.float32) # From world space to eye space
+        mat_view[:3, :3], mat_view[:3, 3] = R[i], t[i].squeeze()
+        yz_flip = np.eye(4, dtype=np.float32)
+        yz_flip[1, 1], yz_flip[2, 2] = -1, -1
+        mat_view = yz_flip.dot(mat_view) # OpenCV to OpenGL camera system
+        mat_view = mat_view.T # OpenGL expects column-wise matrix format
+
+        mat_views.append(mat_view)
 
     # Projection matrix
     mat_proj = _compute_calib_proj(K, 0, 0, im_size[0], im_size[1], clip_near, clip_far)
@@ -397,12 +409,12 @@ def render(model, im_size, K, R, t, clip_near=100, clip_far=2000,
             # Render color image
             global rgb
             rgb = draw_color(shape, vertex_buffer, index_buffer, texture, mat_model,
-                             mat_view, mat_proj, ambient_weight, bg_color, shading)
+                             mat_views, mat_proj, ambient_weight, bg_color, shading)
         if render_depth:
             # Render depth image
             global depth
             depth = draw_depth(shape, vertex_buffer, index_buffer, mat_model,
-                               mat_view, mat_proj)
+                               mat_views, mat_proj)
 
     app.run(framecount=0) # The on_draw function is called framecount+1 times
     window.close()

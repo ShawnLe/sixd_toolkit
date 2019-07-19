@@ -26,7 +26,7 @@ num_inst = cfg.NUM_INST
 
 model = inout.load_ply(cfg.MESH_ROOT + '/textured.ply')
 
-K = cfg.INTRINSICS
+K = np.array(cfg.INTRINSICS).reshape(3,3)
 
 im_size = cfg.IMAGE_SHAPE
 im_size = (int(im_size[0]), int(im_size[1]))
@@ -44,4 +44,11 @@ for i in range(len(gt_poses)):
     print(R)
     print(t)
 
-rgb, dpt = renderer.render(model, im_size, K, Rs, ts)
+size = (im_size[1], im_size[0])
+rgb = renderer.render(model, size, K, Rs, ts, mode='rgb', clip_near=.3, clip_far=6., shading='flat')
+
+im_rescale_factor = cfg.IMG_RESCALE_FACTOR
+rgb = cv2.resize(rgb, None, fx=im_rescale_factor, fy=im_rescale_factor, interpolation=cv2.INTER_LINEAR)
+
+cv2.imshow('rgb', rgb)
+cv2.waitKey()
