@@ -271,15 +271,16 @@ def draw_color(shape, vertex_buffer, index_buffer, texture, mat_model, mat_view,
 
 def draw_depth(shape, vertex_buffer, index_buffer, mat_model, mat_view, mat_proj):
 
+    assert type(mat_view) is list, 'Requires list of arrays.'
+
     program = gloo.Program(_depth_vertex_code, _depth_fragment_code)
     program.bind(vertex_buffer)
-    program['u_mv'] = _compute_model_view(mat_model, mat_view)
-    program['u_mvp'] = _compute_model_view_proj(mat_model, mat_view, mat_proj)
 
     # Frame buffer object
     color_buf = np.zeros((shape[0], shape[1], 4), np.float32).view(gloo.TextureFloat2D)
     depth_buf = np.zeros((shape[0], shape[1]), np.float32).view(gloo.DepthTexture)
     fbo = gloo.FrameBuffer(color=color_buf, depth=depth_buf)
+
     fbo.activate()
 
     # OpenGL setup
@@ -288,14 +289,19 @@ def draw_depth(shape, vertex_buffer, index_buffer, mat_model, mat_view, mat_proj
     gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
     gl.glViewport(0, 0, shape[1], shape[0])
 
-    # Keep the back-face culling disabled because of objects which do not have
-    # well-defined surface (e.g. the lamp from the dataset of Hinterstoisser)
-    gl.glDisable(gl.GL_CULL_FACE)
-    # gl.glEnable(gl.GL_CULL_FACE)
-    # gl.glCullFace(gl.GL_BACK) # Back-facing polygons will be culled
+    for i in range(len(mat_view)):
 
-    # Rendering
-    program.draw(gl.GL_TRIANGLES, index_buffer)
+        program['u_mv'] = _compute_model_view(mat_model, mat_view[i])
+        program['u_mvp'] = _compute_model_view_proj(mat_model, mat_view[i], mat_proj)
+
+        # Keep the back-face culling disabled because of objects which do not have
+        # well-defined surface (e.g. the lamp from the dataset of Hinterstoisser)
+        gl.glDisable(gl.GL_CULL_FACE)
+        # gl.glEnable(gl.GL_CULL_FACE)
+        # gl.glCullFace(gl.GL_BACK) # Back-facing polygons will be culled
+
+        # Rendering
+        program.draw(gl.GL_TRIANGLES, index_buffer)
 
     # Retrieve the contents of the FBO texture
     depth = np.zeros((shape[0], shape[1], 4), dtype=np.float32)
