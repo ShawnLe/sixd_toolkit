@@ -45,12 +45,20 @@ for i in range(len(gt_poses)):
     print(t)
 
 size = (im_size[1], im_size[0])
-rgb, dpt = renderer.render(model, size, K, Rs, ts, mode='rgb+depth', clip_near=.3, clip_far=6., shading='flat')
+rgb, dpt, lbl = renderer.render(model, size, K, Rs, ts, mode='rgb+depth+label', clip_near=.3, clip_far=6., shading='flat')
+
+np.save('lbl.npy', lbl)
+print('lbl.npy is saved to disk.')
 
 im_rescale_factor = cfg.IMG_RESCALE_FACTOR
 rgb = cv2.resize(rgb, None, fx=im_rescale_factor, fy=im_rescale_factor, interpolation=cv2.INTER_LINEAR)
 dpt = cv2.resize(dpt, None, fx=im_rescale_factor, fy=im_rescale_factor, interpolation=cv2.INTER_LINEAR)
+lbl = cv2.resize(lbl, None, fx=im_rescale_factor, fy=im_rescale_factor, interpolation=cv2.INTER_LINEAR)
 
 cv2.imshow('rgb', rgb)
+cv2.imwrite('rgb.jpg', rgb)
 cv2.imshow('dpt', dpt)
+cv2.imwrite('dpt.jpg', dpt)
+cv2.imshow('lbl', lbl*30)
+cv2.imwrite('lbl.jpg', lbl*30)
 cv2.waitKey()

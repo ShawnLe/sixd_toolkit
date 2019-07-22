@@ -16,6 +16,30 @@ from glumpy.log import log
 import logging
 log.setLevel(logging.WARNING) # ERROR, WARNING, DEBUG, INFO
 
+
+# Label vertex shader
+#-------------------------------------------------------------------------------
+_label_vertex_code = """
+uniform mat4 u_mvp;
+
+attribute vec3 a_position;
+
+void main() {
+    gl_Position = u_mvp * vec4(a_position, 1.0);
+}
+"""
+
+# Label fragment shader
+#-------------------------------------------------------------------------------
+_label_fragment_code = """
+uniform float inst_id;
+
+void main() {
+    gl_FragColor = vec4(inst_id, 0.0, 0.0, 1.0);
+}
+"""
+
+
 # Color vertex shader
 #-------------------------------------------------------------------------------
 _color_vertex_code = """
@@ -200,6 +224,47 @@ def _compute_calib_proj(K, x0, y0, w, h, nc, fc, window_coords='y_down'):
     return proj.T
 
 #-------------------------------------------------------------------------------
+def draw_label(shape, vertex_buffer, index_buffer, texture, mat_model, mat_view,
+               mat_proj, ambient_weight, bg_color, shading, inst_ids):
+
+    assert type(mat_view) is list, 'Requires list of arrays.'
+
+    program = gloo.Program(_label_vertex_code, _label_fragment_code)
+    program.bind(vertex_buffer)
+
+    # FBO
+    color_buf = np.zeros((shape[0], shape[1], 4), np.float32).view(gloo.TextureFloat2D)
+    depth_buf = np.zeros((shape[0], shape[1]), np.float32).view(gloo.DepthTexture)
+    fbo = gloo.FrameBuffer(color=color_buf, depth=depth_buf)
+
+    fbo.activate()
+
+    # OpenGL setup
+    gl.glEnable(gl.GL_DEPTH_TEST)
+    gl.glClearColor(bg_color[0], bg_color[1], bg_color[2], bg_color[3])
+    gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
+    gl.glViewport(0, 0, shape[1], shape[0])
+
+    print('inst ids = ' + str(inst_ids))
+    for i in range(len(mat_view)):
+        program['u_mvp'] = _compute_model_view_proj(mat_model, mat_view[i], mat_proj)
+        program['inst_id'] = inst_ids[i]/255.  # input instance-id is mapped to range [0,1]
+
+        gl.glDisable(gl.GL_CULL_FACE)
+
+        program.draw(gl.GL_TRIANGLES, index_buffer)
+
+    label = np.zeros((shape[0], shape[1], 4), dtype=np.float32)
+    gl.glReadPixels(0, 0, shape[1], shape[0], gl.GL_RGBA, gl.GL_FLOAT, label)
+    label.shape = shape[0], shape[1], 4
+    label = label[::-1, :]
+    label = np.round(label[:, :, 0]*255).astype(np.uint8) # Label is saved in the first channel
+
+    fbo.deactivate()
+
+    return label
+
+#-------------------------------------------------------------------------------
 def draw_color(shape, vertex_buffer, index_buffer, texture, mat_model, mat_view,
                mat_proj, ambient_weight, bg_color, shading):
 
@@ -368,8 +433,9 @@ def render(model, im_size, K, R, t, clip_near=100, clip_far=2000,
 
     # Rendering
     #---------------------------------------------------------------------------
-    render_rgb = mode in ['rgb', 'rgb+depth']
-    render_depth = mode in ['depth', 'rgb+depth']
+    render_rgb = mode in ['rgb', 'rgb+depth', 'rgb+label', 'rgb+depth+label']
+    render_depth = mode in ['depth', 'rgb+depth', 'depth+label', 'rgb+depth+label']
+    render_label = mode in ['label', 'rgb+label', 'depth+label', 'rgb+depth+label']
 
     # Model matrix
     mat_model = np.eye(4, dtype=np.float32) # From object space to world space
@@ -416,6 +482,11 @@ def render(model, im_size, K, R, t, clip_near=100, clip_far=2000,
             global rgb
             rgb = draw_color(shape, vertex_buffer, index_buffer, texture, mat_model,
                              mat_views, mat_proj, ambient_weight, bg_color, shading)
+        if render_label:
+            global lbl
+            num_inst = len(mat_views)
+            lbl = draw_label(shape, vertex_buffer, index_buffer, texture, mat_model,
+                             mat_views, mat_proj, ambient_weight, bg_color, shading, [id+1 for id in range(num_inst)])
         if render_depth:
             # Render depth image
             global depth
@@ -431,8 +502,12 @@ def render(model, im_size, K, R, t, clip_near=100, clip_far=2000,
         return rgb
     elif mode == 'depth':
         return depth
+    elif mode == 'label':
+        return lbl
     elif mode == 'rgb+depth':
         return rgb, depth
+    elif mode == 'rgb+depth+label':
+        return rgb, depth, lbl
     else:
         print('Error: Unknown rendering mode.')
         exit(-1)
